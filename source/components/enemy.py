@@ -2,6 +2,7 @@ import pygame
 from .. import tools, setup
 from .. import constants as C
 
+
 def create_enemy(enemy_data):
     enemy_type = enemy_data['type']
     x, y_bottom, direction, color = enemy_data['x'], enemy_data['y'], enemy_data['direction'], enemy_data['color']
@@ -45,10 +46,10 @@ class Enemy(pygame.sprite.Sprite):
     
     def update(self, level):
         self.current_time = pygame.time.get_ticks()
-        self.handle_states()
+        self.handle_states(level)
         self.update_position(level)
 
-    def handle_states(self):
+    def handle_states(self, level):
         if self.state == 'walk':
             self.walk()
         elif self.state == 'die':
@@ -56,7 +57,9 @@ class Enemy(pygame.sprite.Sprite):
         elif self.state == 'fall':
             self.fall()
         elif self.state == 'trampled':
-            self.trampled()
+            self.trampled(level)
+        elif self.state == 'slide':
+            self.slide()
 
         if self.direction:
             self.image = self.right_frames[self.frame_index]
@@ -87,7 +90,7 @@ class Enemy(pygame.sprite.Sprite):
         if self.rect.y > C.SCREEN_H:
             self.kill()    
 
-    def trampled(self):
+    def trampled(self, level):
         self.x_vel = 0
         self.frame_index = 2
         if self.death_timer == 0:
@@ -95,11 +98,26 @@ class Enemy(pygame.sprite.Sprite):
         if self.current_time - self.death_timer > 500:
             self.kill()
 
+    def slide(self):
+        pass
+
     def check_x_collisions(self, level):
         sprite = pygame.sprite.spritecollideany(self, level.ground_items_group)
         if sprite:
-            self.direction = 1 if self.direction == 0 else 0
+            if self.direction:
+                self.direction = 0
+                self.rect.right = sprite.rect.left
+            else:
+                self.direction = 1
+                self.rect.left = sprite.rect.right
             self.x_vel *= -1
+        
+        if self.state == 'slide':
+            enemy = pygame.sprite.spritecollideany(self, level.enemy_group)
+            if enemy:
+                enemy.go_die(how='slided')
+                level.enemy_group.remove(enemy)
+                level.dying_group.add(enemy)
 
     def check_y_collisions(self, level):
         check_group = pygame.sprite.Group(level.ground_items_group, level.box_group, level.brick_group)
@@ -114,11 +132,11 @@ class Enemy(pygame.sprite.Sprite):
 
     def go_die(self, how):
         self.death_timer = self.current_time
-        if how == 'bumped':
+        if how in ['bumped', 'slided']:
             self.y_vel = -8
             self.gravity = 0.6
             self.state = 'die'
-            self.frame_index = 0
+            self.frame_index = 2
         elif how == 'trampled':
             self.state = 'trampled'
 
@@ -147,3 +165,20 @@ class Koopa(Enemy):
             frame_rects = dark_frame_rect
 
         Enemy.__init__(self, x, y_bottom, direction, name, frame_rects)
+        self.shell_timer = 0
+
+    def trampled(self, level):
+        self.x_vel = 0
+        self.frame_index = 2
+
+        if self.shell_timer == 0:
+            self.shell_timer = self.current_time
+        if self.current_time - self.shell_timer > 5000:
+            self.state = 'walk'
+            self.x_vel = - C.ENEMY_SPEED if self.direction == 0 else C.ENEMY_SPEED
+            level.enemy_group.add(self)
+            level.shell_group.remove(self)
+            self.shell_timer = 0
+
+    def slide(self):
+        pass
