@@ -118,13 +118,26 @@ class Level:
                 shell.state = 'slide'
         
     def check_y_collision(self):
-        check_group = pygame.sprite.Group(self.ground_items_group, self.brick_group)
-        collided_sprite = pygame.sprite.spritecollideany(self.player, check_group)
-        if collided_sprite:
-            self.adjust_player_y(collided_sprite)
-
+        ground_item = pygame.sprite.spritecollideany(self.player, self.ground_items_group)
+        brick = pygame.sprite.spritecollideany(self.player, self.brick_group)
+        box = pygame.sprite.spritecollideany(self.player, self.box_group)
         enemy = pygame.sprite.spritecollideany(self.player, self.enemy_group)
-        if enemy:
+
+        if brick and box:
+            to_brick = abs(self.player.rect.centerx - brick.rect.centerx)
+            to_box = abs(self.player.rect.centerx - box.rect.centerx)
+            if to_brick > to_box:
+                brick = None
+            else:
+                box = None
+
+        if ground_item:
+            self.adjust_player_y(ground_item)
+        elif brick:
+            self.adjust_player_y(brick)
+        elif box:
+            self.adjust_player_y(box)
+        elif enemy:
             self.enemy_group.remove(enemy)
             if enemy.name == 'koopa':
                 self.shell_group.add(enemy)
@@ -159,6 +172,14 @@ class Level:
             self.player.y_vel = 7
             self.player.rect.top = sprite.rect.bottom
             self.player.state = 'fall'
+
+            if sprite.name == 'box':
+                if sprite.state == 'rest':
+                    sprite.go_bumped()
+                    
+            if sprite.name == 'brick':
+                if sprite.state == 'rest':
+                    sprite.go_bumped()
     
     def check_will_fall(self, sprite):
         sprite.rect.y += 1
